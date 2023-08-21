@@ -8,7 +8,6 @@ import lombok.Setter;
 
 import javax.lang.model.element.Modifier;
 import java.io.IOException;
-import java.io.Serial;
 import java.io.Serializable;
 import java.nio.file.Files;
 import java.nio.file.Paths;
@@ -16,15 +15,12 @@ import java.util.*;
 import java.util.regex.Pattern;
 import java.util.stream.Collectors;
 
-
 public class JpaGenerator {
     private static final Map<String, TypeSpec.Builder> entityBuilders = new HashMap<>();
     private static final Map<String, List<String>> oneToManyMap = new HashMap<>();
     private static final Set<String> manyToManyTables = new HashSet<>();
     private static final Set<String> oneToOneTables = new HashSet<>();
-
     private static final Map<String, String> oneToOneReferences = new HashMap<>();
-
 
     public static void generateJpaEntities() {
         String sql;
@@ -35,14 +31,9 @@ public class JpaGenerator {
         }
 
         var createStatements = extractCreateStatements(sql);
-
-        // Detect ManyToMany tables first
         manyToManyTables.addAll(detectManyToManyTables(sql));
-
-        // Detect OneToOne tables
         oneToOneTables.addAll(detectOneToOneTables(sql));
 
-        // Generate all entities
         createStatements.forEach(createStatement -> {
             var tableName = extractTableName(createStatement);
             var fields = detectFields(createStatement);
@@ -50,7 +41,6 @@ public class JpaGenerator {
             generateJpaEntity(tableName, fields, references);
         });
 
-        // Finalize entity generation after adding OneToMany relationships
         entityBuilders.forEach((name, builder) -> {
             if (oneToManyMap.containsKey(name)) {
                 oneToManyMap.get(name).forEach(relation -> {
@@ -128,16 +118,13 @@ public class JpaGenerator {
             var firstEntity = entities[0];
             var secondEntity = entities[1];
 
-            // Add the EmbeddedId field for the ManyToMany table
             classBuilder.addField(FieldSpec.builder(ClassName.get("com.hefesto.jpa", tableName + "Id"), "id", Modifier.PRIVATE)
                     .addAnnotation(EmbeddedId.class)
                     .build());
 
-            // Add the ManyToOne fields for the ManyToMany table
-            addManyToOneField(classBuilder, firstEntity);
-            addManyToOneField(classBuilder, secondEntity);
+            addManyToOneField(classBuilder, firstEntity, true);
+            addManyToOneField(classBuilder, secondEntity, true);
 
-            // Generate and save the Embeddable key class
             var keyClass = generateEmbeddedIdClass(tableName, firstEntity, secondEntity);
             var keyJavaFile = JavaFile.builder("com.hefesto.jpa", keyClass).build();
             try {
@@ -146,57 +133,32 @@ public class JpaGenerator {
                 e.printStackTrace();
             }
 
-            // Add the ManyToMany fields to the respective entities
-            addManyToManyField(firstEntity, secondEntity);
-            addManyToManyField(secondEntity, firstEntity);
         }
-
 
         entityBuilders.put(tableName, classBuilder);
     }
 
-    private static void addManyToOneFieldWithMapsId(TypeSpec.Builder classBuilder, String entityName, String idFieldName) {
-        if (!fieldExists(classBuilder, entityName.toLowerCase())) {
-            classBuilder.addField(FieldSpec.builder(ClassName.get("com.hefesto.jpa", toPascalCase(entityName)), entityName.toLowerCase(), Modifier.PRIVATE)
+    private static void addManyToOneField(TypeSpec.Builder classBuilder, String entityName, boolean addMapsId) {
+        String fieldName = entityName.toLowerCase();
+        if (fieldExists(classBuilder, fieldName)) {
+            FieldSpec.Builder fieldBuilder = FieldSpec.builder(ClassName.get("com.hefesto.jpa", toPascalCase(entityName)), fieldName, Modifier.PRIVATE)
                     .addAnnotation(ManyToOne.class)
-                    .addAnnotation(JoinColumn.class)
-                    .addAnnotation(AnnotationSpec.builder(MapsId.class)
-                            .addMember("value", "$S", idFieldName)
-                            .build())
-                    .build());
-        }
-    }
+                    .addAnnotation(JoinColumn.class);
 
-    private static void addManyToOneField(TypeSpec.Builder classBuilder, String entityName) {
-        if (!fieldExists(classBuilder, entityName.toLowerCase())) {
-            classBuilder.addField(FieldSpec.builder(ClassName.get("com.hefesto.jpa", toPascalCase(entityName)), entityName.toLowerCase(), Modifier.PRIVATE)
-                    .addAnnotation(ManyToOne.class)
-                    .addAnnotation(JoinColumn.class)
-                    .addAnnotation(AnnotationSpec.builder(MapsId.class)
-                            .addMember("value", "$S", entityName.toLowerCase() + "Id")
-                            .build())
-                    .build());
-        }
-    }
-
-    private static void addManyToManyField(String mainEntity, String relatedEntity) {
-        if (entityBuilders.containsKey(toPascalCase(mainEntity))) {
-            var builder = entityBuilders.get(toPascalCase(mainEntity));
-            if (!fieldExists(builder, relatedEntity + "s") && !manyToManyTables.contains(mainEntity + "_" + relatedEntity)) {
-                var setOfRelatedEntity = ParameterizedTypeName.get(ClassName.get(Set.class), ClassName.get("com.hefesto.jpa", toPascalCase(relatedEntity)));
-                var relatedEntityField = FieldSpec.builder(setOfRelatedEntity, toCamelCase(relatedEntity) + "s", Modifier.PRIVATE)
-                        .addAnnotation(ManyToMany.class)
-                        .addAnnotation(JoinTable.class)
-                        .build();
-                builder.addField(relatedEntityField);
+            if (addMapsId) {
+                fieldBuilder.addAnnotation(AnnotationSpec.builder(MapsId.class)
+                        .addMember("value", "$S", fieldName + "Id")
+                        .build());
             }
+
+            classBuilder.addField(fieldBuilder.build());
         }
     }
-
 
     private static boolean fieldExists(TypeSpec.Builder builder, String fieldName) {
         return builder.fieldSpecs.stream().anyMatch(field -> field.name.equals(fieldName));
     }
+
     public static TypeName getJavaType(String sqlType) {
         return switch (sqlType.toUpperCase()) {
             case "UUID" -> ClassName.get(UUID.class);
@@ -222,7 +184,6 @@ public class JpaGenerator {
                 .addAnnotation(EqualsAndHashCode.class)
                 .addField(FieldSpec.builder(long.class, "serialVersionUID", Modifier.PRIVATE, Modifier.STATIC, Modifier.FINAL)
                         .initializer("$L", "1L")
-                        .addAnnotation(Serial.class)
                         .build())
                 .addField(FieldSpec.builder(UUID.class, firstEntity.toLowerCase() + "Id", Modifier.PRIVATE)
                         .build())
@@ -242,7 +203,6 @@ public class JpaGenerator {
                 .collect(Collectors.joining());
     }
 
-
     public static String toCamelCase(String s) {
         var words = s.split("_");
         var result = new StringBuilder(words[0].toLowerCase());
@@ -250,16 +210,6 @@ public class JpaGenerator {
             result.append(words[i].substring(0, 1).toUpperCase()).append(words[i].substring(1).toLowerCase());
         }
         return result.toString();
-    }
-
-    public static String toSnakeCase(String input) {
-        if (input == null || input.isEmpty()) {
-            return input;
-        }
-
-        return Arrays.stream(input.split("(?=[A-Z])"))
-                .map(String::toLowerCase)
-                .collect(Collectors.joining("_"));
     }
 
     public static List<String> extractCreateStatements(String sql) {
@@ -291,7 +241,6 @@ public class JpaGenerator {
         return fields;
     }
 
-
     public static Map<String, String> detectReferences(String sql) {
         var pattern = Pattern.compile("(\\w+)\\s+UUID\\s+REFERENCES\\s+(\\w+)", Pattern.CASE_INSENSITIVE);
         var matcher = pattern.matcher(sql);
@@ -321,5 +270,13 @@ public class JpaGenerator {
         return tableName.split("_").length >= 2;
     }
 
+    public static String toSnakeCase(String input) {
+        if (input == null || input.isEmpty()) {
+            return input;
+        }
 
+        return Arrays.stream(input.split("(?=[A-Z])"))
+                .map(String::toLowerCase)
+                .collect(Collectors.joining("_"));
+    }
 }
