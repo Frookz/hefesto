@@ -8,6 +8,7 @@ import lombok.Setter;
 
 import javax.lang.model.element.Modifier;
 import java.io.IOException;
+import java.io.Serial;
 import java.io.Serializable;
 import java.nio.file.Files;
 import java.nio.file.Paths;
@@ -112,6 +113,10 @@ public class JpaGenerator {
             } catch (IOException e) {
                 e.printStackTrace();
             }
+
+            addManyToManyField(firstEntity, tableName, secondEntity);
+            addManyToManyField(secondEntity, tableName, firstEntity);
+
         } else {
             fields.forEach((fieldName, value) -> {
                 var javaType = getJavaType(value);
@@ -138,7 +143,11 @@ public class JpaGenerator {
                                 .computeIfAbsent(toPascalCase(references.get(fieldName)), k -> new ArrayList<>())
                                 .add(tableName);
                     }
+
                 }
+
+
+
 
                 classBuilder.addField(fieldBuilder.build());
             });
@@ -157,8 +166,25 @@ public class JpaGenerator {
         return oneToOneTables;
     }
 
+    private static void addManyToManyField(String mainEntity, String relatedEntity, String junctionTable) {
+        if (entityBuilders.containsKey(toPascalCase(mainEntity))) {
+            var builder = entityBuilders.get(toPascalCase(mainEntity));
+            if (!fieldExists(builder, relatedEntity + "s")) {
+                var setOfRelatedEntity = ParameterizedTypeName.get(ClassName.get(Set.class), ClassName.get("com.hefesto.jpa", toPascalCase(toSnakeCase(relatedEntity))));
+                var relatedEntityField = FieldSpec.builder(setOfRelatedEntity, toCamelCase(toSnakeCase(relatedEntity)) + "s", Modifier.PRIVATE)
+                        .addAnnotation(ManyToMany.class)
+                        .addAnnotation(AnnotationSpec.builder(JoinColumns.class)
+                                .addMember("value", "{@$T(name=\"$L\"), @$T(name=\"$L\")}", JoinColumn.class, mainEntity.toLowerCase() + "_id", JoinColumn.class, junctionTable.toLowerCase() + "_id")
+                                .build())
+                        .build();
+                builder.addField(relatedEntityField);
+            }
+        }
+    }
+
+
     private static void addManyToOneField(TypeSpec.Builder classBuilder, String entityName) {
-        String fieldName = entityName.toLowerCase();
+        var fieldName = entityName.toLowerCase();
         if (fieldExists(classBuilder, fieldName)) {
             var fieldBuilder = FieldSpec.builder(ClassName.get("com.hefesto.jpa", toPascalCase(entityName)), fieldName, Modifier.PRIVATE)
                     .addAnnotation(ManyToOne.class)
@@ -199,6 +225,7 @@ public class JpaGenerator {
                 .addAnnotation(Setter.class)
                 .addAnnotation(EqualsAndHashCode.class)
                 .addField(FieldSpec.builder(long.class, "serialVersionUID", Modifier.PRIVATE, Modifier.STATIC, Modifier.FINAL)
+                        .addAnnotation(Serial.class)
                         .initializer("$L", "1L")
                         .build())
                 .addField(FieldSpec.builder(UUID.class, firstEntity.toLowerCase() + "Id", Modifier.PRIVATE)
