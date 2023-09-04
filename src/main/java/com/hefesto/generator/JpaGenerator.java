@@ -13,6 +13,7 @@ import java.io.Serializable;
 import java.nio.file.Files;
 import java.nio.file.Paths;
 import java.util.*;
+import java.util.regex.Matcher;
 import java.util.regex.Pattern;
 import java.util.stream.Collectors;
 
@@ -21,7 +22,6 @@ public class JpaGenerator {
     private static final Map<String, List<String>> oneToManyMap = new HashMap<>();
     private static final Set<String> manyToManyTables = new HashSet<>();
     private static final Set<String> oneToOneTables = new HashSet<>();
-    private static final Map<String, String> oneToOneReferences = new HashMap<>();
 
     public static void generateJpaEntities() {
         String sql;
@@ -39,7 +39,11 @@ public class JpaGenerator {
             var tableName = extractTableName(createStatement);
             var fields = detectFields(createStatement);
             var references = detectReferences(createStatement);
-            generateJpaEntity(tableName, fields, references);
+            var oneToOneRefs = detectOneToOneReferences(createStatement);
+            if (!oneToOneRefs.isEmpty()) {
+                references.putAll(oneToOneRefs);
+            }
+            generateJpaEntity(tableName, fields, references, oneToOneRefs); // Pasa las referencias OneToOne como un argumento adicional
         });
 
         entityBuilders.forEach((name, builder) -> {
@@ -65,7 +69,7 @@ public class JpaGenerator {
         });
     }
 
-    public static void generateJpaEntity(String rawTableName, Map<String, String> fields, Map<String, String> references) {
+    public static void generateJpaEntity(String rawTableName, Map<String, String> fields, Map<String, String> references, Map<String, String> oneToOneRefs) {
         var tableName = toPascalCase(rawTableName);
         var classBuilder = TypeSpec.classBuilder(tableName)
                 .addModifiers(Modifier.PUBLIC)
@@ -117,7 +121,7 @@ public class JpaGenerator {
             addManyToManyField(firstEntity, tableName, secondEntity);
             addManyToManyField(secondEntity, tableName, firstEntity);
 
-        } else {
+        }  else {
             fields.forEach((fieldName, value) -> {
                 var javaType = getJavaType(value);
                 var camelCaseFieldName = toCamelCase(fieldName);
@@ -129,9 +133,10 @@ public class JpaGenerator {
                 }
 
                 if (references.containsKey(fieldName)) {
-                    if (oneToOneReferences.containsKey(fieldName)) {
-                        var referenceType = ClassName.get("com.hefesto.jpa", toPascalCase(references.get(fieldName)));
-                        fieldBuilder = FieldSpec.builder(referenceType, toCamelCase(toSnakeCase(camelCaseFieldName.replace("Id", ""))), Modifier.PRIVATE)
+                    if (oneToOneRefs.containsKey(fieldName)) { // Verifica si es una referencia OneToOne
+                        var referenceType = ClassName.get("com.hefesto.jpa", toPascalCase(oneToOneRefs.get(fieldName)));
+                        var name = toCamelCase(toSnakeCase(fieldName.replace("_id", "")));
+                        fieldBuilder = FieldSpec.builder(referenceType, name, Modifier.PRIVATE)
                                 .addAnnotation(OneToOne.class)
                                 .addAnnotation(JoinColumn.class);
                     } else {
@@ -143,15 +148,12 @@ public class JpaGenerator {
                                 .computeIfAbsent(toPascalCase(references.get(fieldName)), k -> new ArrayList<>())
                                 .add(tableName);
                     }
-
                 }
-
-
-
 
                 classBuilder.addField(fieldBuilder.build());
             });
         }
+
 
         entityBuilders.put(tableName, classBuilder);
     }
@@ -164,6 +166,32 @@ public class JpaGenerator {
             oneToOneTables.add(matcher.group(1));
         }
         return oneToOneTables;
+    }
+
+    public static Map<String, String> detectOneToOneReferences(String createStatement) {
+        Map<String, String> oneToOneReferences = new HashMap<>();
+
+        // Regular expression to capture the structure (case-insensitive)
+        var patternStr = "(?i)(\\w+\\s+UUID\\s+UNIQUE\\s+REFERENCES\\s+\\w+\\s*\\(\\s*\\w+\\s*\\))";
+        var pattern = Pattern.compile(patternStr);
+
+        // Clean up the statement
+        var cleanedStatement = createStatement.replace("\r", "").replace("\n", "").replaceAll("\\s+", " ");
+
+        var matcher = pattern.matcher(cleanedStatement);
+
+        while (matcher.find()) {
+            var fullMatch = matcher.group(1);
+
+            // Extract field name and referenced table
+            var parts = fullMatch.split("\\s+");
+            var fieldName = parts[0];
+            var referencedTable = parts[parts.length - 2]; // Get the table name from "REFERENCES table_name (column)"
+
+            oneToOneReferences.put(fieldName, referencedTable);
+        }
+
+        return oneToOneReferences;
     }
 
     private static void addManyToManyField(String mainEntity, String relatedEntity, String junctionTable) {
@@ -181,22 +209,6 @@ public class JpaGenerator {
             }
         }
     }
-
-
-    private static void addManyToOneField(TypeSpec.Builder classBuilder, String entityName) {
-        var fieldName = entityName.toLowerCase();
-        if (fieldExists(classBuilder, fieldName)) {
-            var fieldBuilder = FieldSpec.builder(ClassName.get("com.hefesto.jpa", toPascalCase(entityName)), fieldName, Modifier.PRIVATE)
-                    .addAnnotation(ManyToOne.class)
-                    .addAnnotation(JoinColumn.class)
-                    .addAnnotation(AnnotationSpec.builder(MapsId.class)
-                    .addMember("value", "$S", fieldName + "Id")
-                    .build());
-
-            classBuilder.addField(fieldBuilder.build());
-        }
-    }
-
     private static boolean fieldExists(TypeSpec.Builder builder, String fieldName) {
         return builder.fieldSpecs.stream().anyMatch(field -> field.name.equals(fieldName));
     }
@@ -274,6 +286,7 @@ public class JpaGenerator {
         throw new IllegalArgumentException("No table name found in the provided CREATE statement.");
     }
 
+
     public static Map<String, String> detectFields(String sql) {
         var pattern = Pattern.compile("(\\w+)\\s+(UUID|TEXT|VARCHAR\\(\\d+\\)|CHAR\\(\\d+\\)|INT4|INT8|FLOAT8|FLOAT4|BOOL|DATE|TIMESTAMP\\(\\d*\\)?|NUMERIC|DECIMAL|BYTEA|JSON|JSONB|CITEXT)", Pattern.CASE_INSENSITIVE);
         var matcher = pattern.matcher(sql);
@@ -287,15 +300,19 @@ public class JpaGenerator {
     public static Map<String, String> detectReferences(String sql) {
         var pattern = Pattern.compile("(\\w+)\\s+UUID\\s+REFERENCES\\s+(\\w+)", Pattern.CASE_INSENSITIVE);
         var matcher = pattern.matcher(sql);
+
         var references = new HashMap<String, String>();
+
         while (matcher.find()) {
-            references.put(matcher.group(1), matcher.group(2));
-            if (sql.contains(matcher.group(1) + " UUID UNIQUE REFERENCES")) {
-                oneToOneReferences.put(matcher.group(1), matcher.group(2));
+            if (!sql.contains(matcher.group(1) + " UUID UNIQUE REFERENCES")) {
+                references.put(matcher.group(1), matcher.group(2));
             }
         }
+
         return references;
     }
+
+
 
     public static List<String> detectManyToManyTables(String sql) {
         var pattern = Pattern.compile("CREATE TABLE (\\w+)\\s*\\(", Pattern.CASE_INSENSITIVE);
