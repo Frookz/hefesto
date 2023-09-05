@@ -10,10 +10,8 @@ import javax.lang.model.element.Modifier;
 import java.io.IOException;
 import java.io.Serial;
 import java.io.Serializable;
-import java.nio.file.Files;
 import java.nio.file.Paths;
 import java.util.*;
-import java.util.regex.Matcher;
 import java.util.regex.Pattern;
 import java.util.stream.Collectors;
 
@@ -23,13 +21,12 @@ public class JpaGenerator {
     private static final Set<String> manyToManyTables = new HashSet<>();
     private static final Set<String> oneToOneTables = new HashSet<>();
 
-    public static void generateJpaEntities() {
-        String sql;
-        try {
-            sql = new String(Files.readAllBytes(Paths.get("C:\\workspace\\hefesto\\src\\main\\resources\\db\\migration\\test.sql")));
-        } catch (IOException e) {
-            throw new RuntimeException(e);
-        }
+    public static void generateJpaEntities(String sql, String path, String appName) {
+        var appOg = appName;
+        appName = path + "\\" + appName + "\\";
+        var src = appName + "src\\";
+        var main = src + "main\\";
+        var java = main + "java\\";
 
         var createStatements = extractCreateStatements(sql);
         manyToManyTables.addAll(detectManyToManyTables(sql));
@@ -43,33 +40,37 @@ public class JpaGenerator {
             if (!oneToOneRefs.isEmpty()) {
                 references.putAll(oneToOneRefs);
             }
-            generateJpaEntity(tableName, fields, references, oneToOneRefs); // Pasa las referencias OneToOne como un argumento adicional
+            generateJpaEntity(tableName, fields, references, oneToOneRefs, java, appOg);
         });
 
-        entityBuilders.forEach((name, builder) -> {
+        for (var entry : entityBuilders.entrySet()) {
+            var name = entry.getKey();
+            var builder = entry.getValue();
             if (oneToManyMap.containsKey(name)) {
-                oneToManyMap.get(name).forEach(relation -> {
+                for (var relation : oneToManyMap.get(name)) {
                     if (!fieldExists(builder, toCamelCase(toSnakeCase(relation)) + "s")) {
-                        var listType = ParameterizedTypeName.get(ClassName.get(Set.class), ClassName.get("com.hefesto.jpa", relation));
+                        var listType = ParameterizedTypeName.get(ClassName.get(Set.class), ClassName.get("com." + appOg.toLowerCase() + ".jpa", relation));
                         var fieldBuilder = FieldSpec.builder(listType, toCamelCase(toSnakeCase(relation)) + "s", Modifier.PRIVATE)
                                 .addAnnotation(AnnotationSpec.builder(OneToMany.class)
                                         .addMember("mappedBy", "$S", toCamelCase(name).toLowerCase())
                                         .build());
                         builder.addField(fieldBuilder.build());
                     }
-                });
+                }
             }
 
-            var javaFile = JavaFile.builder("com.hefesto.jpa", builder.build()).build();
+            var javaFile = JavaFile.builder("com."+ appOg.toLowerCase() + ".jpa", builder.build()).build();
             try {
-                javaFile.writeTo(Paths.get("C:\\workspace\\hefesto\\src\\main\\java"));
+
+                var filePath = path + "\\" + appOg + "\\src" + "\\main" + "\\java";
+                javaFile.writeTo(Paths.get(filePath));
             } catch (IOException e) {
                 e.printStackTrace();
             }
-        });
+        }
     }
 
-    public static void generateJpaEntity(String rawTableName, Map<String, String> fields, Map<String, String> references, Map<String, String> oneToOneRefs) {
+    public static void generateJpaEntity(String rawTableName, Map<String, String> fields, Map<String, String> references, Map<String, String> oneToOneRefs, String path, String appName) {
         var tableName = toPascalCase(rawTableName);
         var classBuilder = TypeSpec.classBuilder(tableName)
                 .addModifiers(Modifier.PUBLIC)
@@ -86,13 +87,13 @@ public class JpaGenerator {
             var secondEntity = entities[1];
 
             if (!fieldExists(classBuilder, "id")) {
-                classBuilder.addField(FieldSpec.builder(ClassName.get("com.hefesto.jpa", tableName + "Id"), "id", Modifier.PRIVATE)
+                classBuilder.addField(FieldSpec.builder(ClassName.get("com."+ appName.toLowerCase() + ".jpa", tableName + "Id"), "id", Modifier.PRIVATE)
                         .addAnnotation(EmbeddedId.class)
                         .build());
             }
 
             if (!fieldExists(classBuilder, firstEntity.toLowerCase())) {
-                classBuilder.addField(FieldSpec.builder(ClassName.get("com.hefesto.jpa", toPascalCase(firstEntity)), firstEntity.toLowerCase(), Modifier.PRIVATE)
+                classBuilder.addField(FieldSpec.builder(ClassName.get("com."+ appName.toLowerCase() + ".jpa", toPascalCase(firstEntity)), firstEntity.toLowerCase(), Modifier.PRIVATE)
                         .addAnnotation(ManyToOne.class)
                         .addAnnotation(JoinColumn.class)
                         .addAnnotation(AnnotationSpec.builder(MapsId.class)
@@ -101,7 +102,7 @@ public class JpaGenerator {
                         .build());
             }
             if (!fieldExists(classBuilder, secondEntity.toLowerCase())) {
-                classBuilder.addField(FieldSpec.builder(ClassName.get("com.hefesto.jpa", toPascalCase(secondEntity)), secondEntity.toLowerCase(), Modifier.PRIVATE)
+                classBuilder.addField(FieldSpec.builder(ClassName.get("com."+ appName.toLowerCase() + ".jpa", toPascalCase(secondEntity)), secondEntity.toLowerCase(), Modifier.PRIVATE)
                         .addAnnotation(ManyToOne.class)
                         .addAnnotation(JoinColumn.class)
                         .addAnnotation(AnnotationSpec.builder(MapsId.class)
@@ -111,15 +112,15 @@ public class JpaGenerator {
             }
 
             var keyClass = generateEmbeddedIdClass(tableName, firstEntity, secondEntity);
-            var keyJavaFile = JavaFile.builder("com.hefesto.jpa", keyClass).build();
+            var keyJavaFile = JavaFile.builder("com."+ appName.toLowerCase() + ".jpa", keyClass).build();
             try {
-                keyJavaFile.writeTo(Paths.get("C:\\workspace\\hefesto\\src\\main\\java"));
+                keyJavaFile.writeTo(Paths.get(path));
             } catch (IOException e) {
                 e.printStackTrace();
             }
 
-            addManyToManyField(firstEntity, tableName, secondEntity);
-            addManyToManyField(secondEntity, tableName, firstEntity);
+            addManyToManyField(firstEntity, tableName, secondEntity , appName.toLowerCase());
+            addManyToManyField(secondEntity, tableName, firstEntity , appName.toLowerCase());
 
         }  else {
             fields.forEach((fieldName, value) -> {
@@ -133,14 +134,14 @@ public class JpaGenerator {
                 }
 
                 if (references.containsKey(fieldName)) {
-                    if (oneToOneRefs.containsKey(fieldName)) { // Verifica si es una referencia OneToOne
-                        var referenceType = ClassName.get("com.hefesto.jpa", toPascalCase(oneToOneRefs.get(fieldName)));
+                    if (oneToOneRefs.containsKey(fieldName)) {
+                        var referenceType = ClassName.get("com."+ appName.toLowerCase() + ".jpa", toPascalCase(oneToOneRefs.get(fieldName)));
                         var name = toCamelCase(toSnakeCase(fieldName.replace("_id", "")));
                         fieldBuilder = FieldSpec.builder(referenceType, name, Modifier.PRIVATE)
                                 .addAnnotation(OneToOne.class)
                                 .addAnnotation(JoinColumn.class);
                     } else {
-                        var referenceType = ClassName.get("com.hefesto.jpa", toPascalCase(references.get(fieldName)));
+                        var referenceType = ClassName.get("com."+ appName.toLowerCase() + ".jpa", toPascalCase(references.get(fieldName)));
                         fieldBuilder = FieldSpec.builder(referenceType, toCamelCase(toSnakeCase(camelCaseFieldName.replace("Id", ""))), Modifier.PRIVATE)
                                 .addAnnotation(ManyToOne.class)
                                 .addAnnotation(JoinColumn.class);
@@ -194,11 +195,11 @@ public class JpaGenerator {
         return oneToOneReferences;
     }
 
-    private static void addManyToManyField(String mainEntity, String relatedEntity, String junctionTable) {
+    private static void addManyToManyField(String mainEntity, String relatedEntity, String junctionTable, String appName) {
         if (entityBuilders.containsKey(toPascalCase(mainEntity))) {
             var builder = entityBuilders.get(toPascalCase(mainEntity));
             if (!fieldExists(builder, relatedEntity + "s")) {
-                var setOfRelatedEntity = ParameterizedTypeName.get(ClassName.get(Set.class), ClassName.get("com.hefesto.jpa", toPascalCase(toSnakeCase(relatedEntity))));
+                var setOfRelatedEntity = ParameterizedTypeName.get(ClassName.get(Set.class), ClassName.get("com."+ appName.toLowerCase() + ".jpa", toPascalCase(toSnakeCase(relatedEntity))));
                 var relatedEntityField = FieldSpec.builder(setOfRelatedEntity, toCamelCase(toSnakeCase(relatedEntity)) + "s", Modifier.PRIVATE)
                         .addAnnotation(ManyToMany.class)
                         .addAnnotation(AnnotationSpec.builder(JoinColumns.class)

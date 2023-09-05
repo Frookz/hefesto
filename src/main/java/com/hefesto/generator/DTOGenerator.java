@@ -5,7 +5,6 @@ import lombok.Data;
 
 import javax.lang.model.element.Modifier;
 import java.io.IOException;
-import java.nio.file.Files;
 import java.nio.file.Paths;
 import java.util.HashMap;
 import java.util.HashSet;
@@ -21,13 +20,12 @@ public class DTOGenerator {
     private static final Map<String, String> referenceMap = new HashMap<>();
     private static final Map<String, Set<String>> oneToManyMap = new HashMap<>();
 
-    public static void generateDTOs() {
-        String sql;
-        try {
-            sql = new String(Files.readAllBytes(Paths.get("C:\\workspace\\hefesto\\src\\main\\resources\\db\\migration\\test.sql")));
-        } catch (IOException e) {
-            throw new RuntimeException(e);
-        }
+    public static void generateDTOs(String sql, String path, String appName) {
+        var appNameOg = appName;
+        appName = path + "\\" + appName + "\\";
+        var src = appName + "src\\";
+        var main = src + "main\\";
+        var java = main + "java\\";
 
         var createStatements = extractCreateStatements(sql);
 
@@ -40,22 +38,25 @@ public class DTOGenerator {
             if (!oneToOneRefs.isEmpty()) {
                 references.putAll(oneToOneRefs);
             }
-            generateDTO(tableName, fields, references, oneToOneRefs);
+            generateDTO(tableName, fields, references, oneToOneRefs, appNameOg);
         });
 
         // Finalize DTO generation
+
         dtoBuilders.forEach((name, builder) -> {
             if (oneToManyMap.containsKey(name)) {
                 oneToManyMap.get(name).forEach(relation -> {
-                    var listType = ParameterizedTypeName.get(ClassName.get(Set.class), ClassName.get("com.hefesto.dto", relation + "Dto"));
+                    var packageName = "com." + appNameOg.toLowerCase() + ".dto";
+                    var listType = ParameterizedTypeName.get(ClassName.get(Set.class), ClassName.get(packageName, relation + "Dto"));
                     var fieldBuilder = FieldSpec.builder(listType, toCamelCase(toSnakeCase(relation)) + "s", Modifier.PRIVATE);
                     builder.addField(fieldBuilder.build());
                 });
             }
 
-            var javaFile = JavaFile.builder("com.hefesto.dto", builder.build()).build();
+            var packageName = java + "com\\" + appNameOg.toLowerCase() + "\\dto";
+            var javaFile = JavaFile.builder("com." + appNameOg.toLowerCase() + ".dto", builder.build()).build();
             try {
-                javaFile.writeTo(Paths.get("C:\\workspace\\hefesto\\src\\main\\java"));
+                javaFile.writeTo(Paths.get(java));
             } catch (IOException e) {
                 e.printStackTrace();
             }
@@ -72,7 +73,7 @@ public class DTOGenerator {
     }
 
 
-    public static void generateDTO(String rawTableName, Map<String, String> fields, Map<String, String> references, Map<String, String> oneToOneRefs) {
+    public static void generateDTO(String rawTableName, Map<String, String> fields, Map<String, String> references, Map<String, String> oneToOneRefs, String appName) {
         var dtoName = toPascalCase(rawTableName) + "Dto";
         var classBuilder = TypeSpec.classBuilder(dtoName)
                 .addModifiers(Modifier.PUBLIC)
@@ -87,12 +88,12 @@ public class DTOGenerator {
             if (references.containsKey(fieldName)) {
                 if (oneToOneRefs.containsKey(fieldName)) { // Check if it's a one-to-one reference
                     var referenceDtoName = toPascalCase(oneToOneRefs.get(fieldName)) + "Dto";
-                    var referenceType = ClassName.get("com.hefesto.dto", referenceDtoName);
+                    var referenceType = ClassName.get("com."+ appName.toLowerCase() + ".dto", referenceDtoName);
                     fieldBuilder = FieldSpec.builder(referenceType, toCamelCase(toSnakeCase(camelCaseFieldName.replace("Id", ""))), Modifier.PRIVATE);
                 } else {
                     // Existing code for handling one-to-many
                     var referenceDtoName = toPascalCase(references.get(fieldName)) + "Dto";
-                    var referenceType = ClassName.get("com.hefesto.dto", referenceDtoName);
+                    var referenceType = ClassName.get("com."+ appName.toLowerCase() + ".dto", referenceDtoName);
                     fieldBuilder = FieldSpec.builder(referenceType, toCamelCase(toSnakeCase(camelCaseFieldName.replace("Id", ""))), Modifier.PRIVATE);
                     referenceMap.put(dtoName, referenceDtoName);
                     oneToManyMap.computeIfAbsent(referenceDtoName, k -> new HashSet<>()).add(dtoName.replace("Dto", ""));
