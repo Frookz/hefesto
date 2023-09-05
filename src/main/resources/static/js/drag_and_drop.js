@@ -1,6 +1,6 @@
 document.addEventListener("DOMContentLoaded", function () {
-    var dropZone = document.getElementById('dragDropArea');
-    var statusMessage = document.getElementById('statusMessage');
+    let dropZone = document.getElementById('dragDropArea');
+    let statusMessage = document.getElementById('statusMessage');
 
     dropZone.addEventListener('dragover', function (event) {
         event.preventDefault();
@@ -9,9 +9,9 @@ document.addEventListener("DOMContentLoaded", function () {
 
     dropZone.addEventListener('drop', function (event) {
         event.preventDefault();
-        var files = event.dataTransfer.files;
-        for (var i = 0; i < files.length; i++) {
-            var file = files[i];
+        let files = event.dataTransfer.files;
+        for (let i = 0; i < files.length; i++) {
+            let file = files[i];
             if (file.name.endsWith('.sql')) {
                 uploadFile(file);
             }
@@ -19,16 +19,13 @@ document.addEventListener("DOMContentLoaded", function () {
     });
 
     function uploadFile(file) {
-        var formData = new FormData();
+        let formData = new FormData();
         formData.append('file', file);
-        // Añadir base package al formData
-        var basePackage = document.getElementById('basePackage').value;
 
-
+        let basePackage = document.getElementById('basePackage').value;
         formData.append('basePackage', basePackage);
 
-        var appName = document.getElementById("appName").value;
-
+        let appName = document.getElementById("appName").value;
         formData.append('appName', appName);
 
         fetch('/upload', {

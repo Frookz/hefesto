@@ -224,7 +224,7 @@ public class JpaGenerator {
             case "FLOAT4" -> TypeName.FLOAT;
             case "BOOL" -> TypeName.BOOLEAN;
             case "DATE" -> ClassName.get(java.sql.Date.class);
-            case "TIMESTAMP" -> ClassName.get(java.sql.Timestamp.class);
+            case "TIMESTAMP", "TIMESTAMP DEFAULT NOW()" -> ClassName.get(java.sql.Timestamp.class);
             default -> throw new IllegalArgumentException("Unsupported SQL type: " + sqlType);
         };
     }
@@ -289,7 +289,7 @@ public class JpaGenerator {
 
 
     public static Map<String, String> detectFields(String sql) {
-        var pattern = Pattern.compile("(\\w+)\\s+(UUID|TEXT|VARCHAR\\(\\d+\\)|CHAR\\(\\d+\\)|INT4|INT8|FLOAT8|FLOAT4|BOOL|DATE|TIMESTAMP\\(\\d*\\)?|NUMERIC|DECIMAL|BYTEA|JSON|JSONB|CITEXT)", Pattern.CASE_INSENSITIVE);
+        var pattern = Pattern.compile("(\\w+)\\s+(UUID|TEXT|VARCHAR\\(\\d+\\)|CHAR\\(\\d+\\)|INT4|INT8|FLOAT8|FLOAT4|BOOL|DATE|TIMESTAMP(\\(\\d*\\))?\\s*(DEFAULT\\s+NOW\\(\\))?(\\s+NOT\\s+NULL)?|NUMERIC|DECIMAL|BYTEA|JSON|JSONB|CITEXT)", Pattern.CASE_INSENSITIVE);
         var matcher = pattern.matcher(sql);
         var fields = new HashMap<String, String>();
         while (matcher.find()) {

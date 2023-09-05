@@ -23,11 +23,11 @@ import java.nio.file.Paths;
 import java.util.Arrays;
 import java.util.List;
 import java.util.Random;
-
+@Slf4j
 public class DirectoryGenerator {
 
     public static void createAllDirectories(String basePackagePath, String appName) {
-        appName = appName + "/";
+        appName += "/";
         var src = appName + "src/";
         var main = src + "main/";
         var test = src + "test/";
@@ -63,16 +63,20 @@ public class DirectoryGenerator {
                 e.printStackTrace();
             }
         });
+        var currentProjectPath = System.getProperty("user.dir");
 
         // Copiar los archivos y carpetas adicionales
         copyFileToProject("pom.xml", basePackagePath + "/" + appName);
         copyFileToProject("mvnw", basePackagePath + "/" + appName);
         copyFileToProject("mvnw.cmd", basePackagePath + "/" + appName);
         copyFileToProject("compose.yaml", basePackagePath + "/" + appName);
+
         copyDirectoryToProject(".mvn", basePackagePath + "/" + appName);
-        var currentProjectPath = System.getProperty("user.dir");
+
         updateAndCopyApplicationYml(currentProjectPath, basePackagePath + "/" + appName + "/src/main/resources/");
+
         updatePomElements(basePackagePath + "/" + appName + "pom.xml", appName);
+
         generateMainClass(appName.replace("/", ""), basePackagePath + "\\" + appName);
     }
 
@@ -84,12 +88,10 @@ public class DirectoryGenerator {
             var doc = dBuilder.parse(inputFile);
             doc.getDocumentElement().normalize();
 
-            // Function to update a tag's content
             updateTagContent(doc, "name", newName.replace("/", ""));
             updateTagContent(doc, "groupId", "com." + newName.toLowerCase().replace("/", ""));
             updateTagContent(doc, "artifactId", newName.toLowerCase().replace("/", ""));
 
-            // Save the updated document to file
             var transformerFactory = TransformerFactory.newInstance();
             var transformer = transformerFactory.newTransformer();
             var source = new DOMSource(doc);
@@ -130,9 +132,9 @@ public class DirectoryGenerator {
 
         try {
             Files.copy(sourcePath, destinationPath);
-            System.out.println(fileName + " has been copied to the new project.");
+            log.info(fileName + " has been copied to the new project.");
         } catch (IOException e) {
-            System.out.println("An error occurred while copying " + fileName);
+            log.info("An error occurred while copying " + fileName);
             e.printStackTrace();
         }
     }
@@ -150,10 +152,10 @@ public class DirectoryGenerator {
                     e.printStackTrace();
                 }
             });
-            System.out.println(directoryName + " has been copied to the new project.");
+            log.info(directoryName + " has been copied to the new project.");
         } catch (IOException e) {
-            System.out.println("An error occurred while copying directory " + directoryName);
-            e.printStackTrace();
+            log.info("An error occurred while copying directory " + directoryName);
+
         }
     }
 
@@ -163,7 +165,7 @@ public class DirectoryGenerator {
             deleteDirectory(path);
         }
         Files.createDirectories(path);
-        System.out.println("Directory created: " + path);
+        log.info("Directory created: " + path);
     }
 
     private static void deleteDirectory(Path path) throws IOException {
