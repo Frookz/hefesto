@@ -4,6 +4,7 @@ body, html {
     background-color: #121212;
     color: #e4e4e4;
     height: 100%;
+    font-weight: bolder;
     margin: 0;
 }
 
@@ -30,10 +31,6 @@ body, html {
 .drag-drop-text {
     font-size: 5rem;  /* Hace el símbolo de + más grande */
     color: #ffffff !important;  /* Cambia el color a blanco */
-}
-
-.text-muted {
-    color: #757575 !important;
 }
 
 .input-large {

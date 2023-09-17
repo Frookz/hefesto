@@ -23,6 +23,7 @@ import java.nio.file.Paths;
 import java.util.Arrays;
 import java.util.List;
 import java.util.Random;
+
 @Slf4j
 public class DirectoryGenerator {
 
@@ -54,7 +55,7 @@ public class DirectoryGenerator {
                                         app + "config",
                                         app + "exceptions",
                                         app + "repositories");
-
+            
         directories.forEach(dir -> {
             try {
                 createDirectory(basePackagePath, dir);

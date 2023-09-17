@@ -101,6 +101,7 @@ public class JpaGenerator {
                                 .build())
                         .build());
             }
+
             if (!fieldExists(classBuilder, secondEntity.toLowerCase())) {
                 classBuilder.addField(FieldSpec.builder(ClassName.get("com."+ appName.toLowerCase() + ".jpa", toPascalCase(secondEntity)), secondEntity.toLowerCase(), Modifier.PRIVATE)
                         .addAnnotation(ManyToOne.class)

@@ -16,15 +16,19 @@ public class FileUploadController {
     public ResponseEntity<Boolean> uploadFile(@RequestParam("file") MultipartFile file,
                                               @RequestParam("basePackage") String basePackage,
                                               @RequestParam("appName") String appName) throws IOException {
-        if (file.isEmpty()) {
-            throw new IllegalArgumentException("El archivo está vacío");
-        }
+
+        if (file.isEmpty()) throw new IllegalArgumentException("El archivo está vacío");
+        if(basePackage.isEmpty()) throw new IllegalArgumentException("El basePackage está vacío");
+        if(appName.isEmpty()) throw new IllegalArgumentException("El appName está vacío");
+
 
         var content = new String(file.getBytes(), StandardCharsets.UTF_8);
 
         DirectoryGenerator.createAllDirectories(basePackage, appName);
         JpaGenerator.generateJpaEntities(content, basePackage, appName);
         DTOGenerator.generateDTOs(content, basePackage, appName);
+        ResponseGenerator.generateResponses(content, basePackage, appName);
+        ControllerGenerator.generateControllers(content, basePackage, appName);
 
         return ResponseEntity.ok(true);
     }
