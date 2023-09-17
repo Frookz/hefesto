@@ -21,7 +21,6 @@ public class FileUploadController {
         if(basePackage.isEmpty()) throw new IllegalArgumentException("El basePackage está vacío");
         if(appName.isEmpty()) throw new IllegalArgumentException("El appName está vacío");
 
-
         var content = new String(file.getBytes(), StandardCharsets.UTF_8);
 
         DirectoryGenerator.createAllDirectories(basePackage, appName);

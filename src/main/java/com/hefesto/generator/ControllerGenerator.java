@@ -38,7 +38,7 @@ public class ControllerGenerator {
             var controllerClass = TypeSpec.classBuilder(controllerClassName)
                     .addModifiers(Modifier.PUBLIC)
                     .addAnnotation(AnnotationSpec.builder(ClassName.get("org.springframework.web.bind.annotation", "RequestMapping"))
-                            .addMember("value", "{$S, $S, $S, $S}", "/meat/" + appName, "/fish/" + appName, "/frozen/" + appName, "/fish/" + appName)
+                            .addMember("value", "{$S, $S, $S, $S}", "/meat/" + createStatement, "/fish/" + createStatement, "/frozen/" + createStatement, "/frnv/" + createStatement)
                             .build())
                     .addMethod(generateCreateMethod(toPascalCase(createStatement), responseEntityType))
                     .addMethod(generateReadMethod(toPascalCase(createStatement), responseEntityType))
