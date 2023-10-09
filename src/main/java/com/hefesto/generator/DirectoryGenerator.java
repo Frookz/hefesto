@@ -4,6 +4,7 @@ import com.squareup.javapoet.ClassName;
 import com.squareup.javapoet.JavaFile;
 import com.squareup.javapoet.MethodSpec;
 import com.squareup.javapoet.TypeSpec;
+import lombok.extern.java.Log;
 import lombok.extern.slf4j.Slf4j;
 import org.springframework.boot.SpringApplication;
 import org.springframework.boot.autoconfigure.SpringBootApplication;
@@ -24,7 +25,7 @@ import java.util.Arrays;
 import java.util.List;
 import java.util.Random;
 
-@Slf4j
+@Log
 public class DirectoryGenerator {
 
     public static void createAllDirectories(String basePackagePath, String appName) {

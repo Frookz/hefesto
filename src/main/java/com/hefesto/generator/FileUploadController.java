@@ -1,5 +1,9 @@
 package com.hefesto.generator;
 
+
+ import lombok.extern.java.Log;
+ import org.slf4j.Logger;
+import org.slf4j.LoggerFactory;
 import org.springframework.http.ResponseEntity;
 import org.springframework.web.bind.annotation.PostMapping;
 import org.springframework.web.bind.annotation.RequestParam;
@@ -10,6 +14,7 @@ import java.io.IOException;
 import java.nio.charset.StandardCharsets;
 
 @RestController
+@Log
 public class FileUploadController {
 
     @PostMapping("/upload")
@@ -23,11 +28,14 @@ public class FileUploadController {
 
         var content = new String(file.getBytes(), StandardCharsets.UTF_8);
 
-        DirectoryGenerator.createAllDirectories(basePackage, appName);
-        JpaGenerator.generateJpaEntities(content, basePackage, appName);
-        DTOGenerator.generateDTOs(content, basePackage, appName);
-        ResponseGenerator.generateResponses(content, basePackage, appName);
-        ControllerGenerator.generateControllers(content, basePackage, appName);
+        log.info("GRAPHANA ME VES !????");
+
+
+        //DirectoryGenerator.createAllDirectories(basePackage, appName);
+        //JpaGenerator.generateJpaEntities(content, basePackage, appName);
+        //DTOGenerator.generateDTOs(content, basePackage, appName);
+        //ResponseGenerator.generateResponses(content, basePackage, appName);
+        //ControllerGenerator.generateControllers(content, basePackage, appName);
 
         return ResponseEntity.ok(true);
     }

@@ -70,7 +70,7 @@ public class ControllerGenerator {
 
 
     private static MethodSpec generateReadMethod(String entityName, TypeName responseEntityType) {
-        return MethodSpec.methodBuilder("read" + entityName)
+        return MethodSpec.methodBuilder("get" + entityName)
                 .addModifiers(Modifier.PUBLIC)
                 .returns(responseEntityType)
                 .addAnnotation(ClassName.get("org.springframework.web.bind.annotation", "GetMapping"))

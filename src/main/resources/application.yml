@@ -1,2 +1,19 @@
 server:
   port: 8080
+management:
+  endpoints:
+    web:
+      exposure:
+        include: metrics,prometheus
+  prometheus:
+    metrics:
+      export:
+        enabled: true
+spring:
+  autoconfigure:
+    exclude: org.springframework.boot.autoconfigure.jdbc.DataSourceAutoConfiguration
+  application:
+    name: hefesto
+logging:
+  level:
+    root: warn
